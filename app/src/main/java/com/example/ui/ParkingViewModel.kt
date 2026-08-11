@@ -47,6 +47,14 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
     private val _subscriptionInfo = MutableStateFlow(subscriptionManager.getSubscriptionInfo())
     val subscriptionInfoFlow: StateFlow<SubscriptionInfo> = _subscriptionInfo.asStateFlow()
 
+    // Room Persistent Activation Records
+    val activationRecordsFlow: StateFlow<List<ActivationRecord>> = db.activationDao().getAllActivations()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     init {
         // Bind the SUNMI SDK printer service lifecycle initially
         printEngine.bindService(application)

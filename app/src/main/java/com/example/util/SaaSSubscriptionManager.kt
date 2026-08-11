@@ -8,6 +8,11 @@ import java.util.Locale
 
 import com.example.network.ParkSathiNetworkClient
 import com.example.network.VerifyLicenseResponse
+import com.example.data.ActivationRecord
+import com.example.data.AppDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 enum class SubscriptionPlan(val displayName: String, val priceNpr: Int, val durationDays: Int) {
     TRIAL("14-Day Free Trial", 0, 14),
@@ -64,6 +69,8 @@ class SaaSSubscriptionManager(private val context: Context) {
                 .putLong(KEY_ACTIVATED_AT, now)
                 .putLong(KEY_EXPIRES_AT, expiry)
                 .apply()
+
+            recordActivationInRoom("PARKSATHI-TRIAL-14D", SubscriptionPlan.TRIAL, now, expiry)
         }
     }
 
@@ -181,10 +188,33 @@ class SaaSSubscriptionManager(private val context: Context) {
             .putLong(KEY_EXPIRES_AT, newExpiry)
             .apply()
 
+        recordActivationInRoom(licenseKey, plan, now, newExpiry)
+
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val expiryStr = sdf.format(Date(newExpiry))
 
         return Pair(true, "Successfully activated ${plan.displayName}! Valid until $expiryStr")
+    }
+
+    private fun recordActivationInRoom(licenseKey: String, plan: SubscriptionPlan, activatedAt: Long, expiresAt: Long) {
+        val merchantName = prefs.getString(KEY_MERCHANT_NAME, "Civil Mall Complex Parking") ?: "Civil Mall Complex Parking"
+        val deviceId = ParkSathiNetworkClient.getDeviceId(context)
+        val record = ActivationRecord(
+            licenseKey = licenseKey,
+            planName = plan.displayName,
+            activatedAtMillis = activatedAt,
+            expiresAtMillis = expiresAt,
+            status = if (expiresAt > System.currentTimeMillis()) "ACTIVE" else "EXPIRED",
+            deviceHardwareId = deviceId,
+            merchantName = merchantName
+        )
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                AppDatabase.getDatabase(context).activationDao().insertActivation(record)
+            } catch (e: Exception) {
+                // handle safely
+            }
+        }
     }
 
     fun formattedDate(timeMillis: Long): String {

@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ParkingTicket
 import com.example.data.VehicleType
+import com.example.data.ActivationRecord
+import com.example.network.ParkSathiNetworkClient
 import com.example.ui.ParkingViewModel
 import com.example.util.FonepayEsewaQrGenerator.PaymentGateway
 import com.example.util.SubscriptionPlan
@@ -45,6 +49,7 @@ fun SaaSAdminScreen(
     val companyPan by viewModel.companyPan.collectAsState()
 
     val subInfo by viewModel.subscriptionInfoFlow.collectAsState()
+    val activationRecords by viewModel.activationRecordsFlow.collectAsState()
     val scope = rememberCoroutineScope()
     var isActivating by remember { mutableStateOf(false) }
 
@@ -227,31 +232,7 @@ fun SaaSAdminScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Quick Demo Keys Helper Chips
-                Text("Quick Demo Activation Keys:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    AssistChip(
-                        onClick = { licenseInput = "PARKSATHI-MONTHLY-2026" },
-                        label = { Text("Monthly Pro", fontSize = 11.sp) },
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    AssistChip(
-                        onClick = { licenseInput = "PARKSATHI-YEARLY-2026" },
-                        label = { Text("Yearly Enterprise", fontSize = 11.sp) },
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    AssistChip(
-                        onClick = { licenseInput = "PARKSATHI-TRIAL-14D" },
-                        label = { Text("14D Trial", fontSize = 11.sp) },
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = {
@@ -287,6 +268,221 @@ fun SaaSAdminScreen(
         }
 
         // ==========================================
+        // SAAS WEBSITE DEMO ACTIVATION KEYS
+        // ==========================================
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = "Activation Keys for SaaS Website Demo",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+                Text(
+                    text = "Instant Hardware Binding Serial Keys available for testing or activation:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Demo Key 1: 14-Day Free Trial
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("14-DAY FREE TRIAL KEY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("PARKSATHI-TRIAL-14D", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                            Text("Instant test activation code", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        }
+                        Button(
+                            onClick = {
+                                licenseInput = "PARKSATHI-TRIAL-14D"
+                                scope.launch {
+                                    val (success, msg) = viewModel.activateSaaSKeyOnline("PARKSATHI-TRIAL-14D")
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Activate Trial", fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Monthly & Yearly Subscription Purchasing Card
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "MONTHLY & YEARLY SUBSCRIPTIONS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "To activate a paid Monthly or Yearly plan, purchase an activation key via WhatsApp or our official website.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val deviceId = ParkSathiNetworkClient.getDeviceId(context)
+                            
+                            // WhatsApp Contact Button
+                            Button(
+                                onClick = {
+                                    val message = "Hello ParkSathi Team, I would like to buy an Activation Key for my POS Terminal.\nDevice Hardware ID: $deviceId"
+                                    val url = "https://api.whatsapp.com/send?phone=9779800000000&text=" + Uri.encode(message)
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                    try {
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Opening WhatsApp / Browser...", Toast.LENGTH_SHORT).show()
+                                        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://prajnaworld.com"))
+                                        context.startActivity(webIntent)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Contact WhatsApp", fontSize = 11.sp, color = Color.White)
+                            }
+
+                            // Website Link Button
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://prajnaworld.com"))
+                                    context.startActivity(intent)
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Visit Website", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // ROOM DATABASE ACTIVATION RECORDS LOG
+        // ==========================================
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = "Room Database Activation Log (${activationRecords.size})",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+                Text(
+                    text = "Persistent local SQLite table storing hardware activations & serial key bindings:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (activationRecords.isEmpty()) {
+                    Text(
+                        text = "No activation history recorded in Room DB yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                } else {
+                    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                    activationRecords.take(5).forEach { record ->
+                        Card(
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = record.licenseKey,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                    Surface(
+                                        color = if (record.status == "ACTIVE") Color(0xFFDCFCE7) else Color(0xFFFEE2E2),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = record.status,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (record.status == "ACTIVE") Color(0xFF166534) else Color(0xFF991B1B),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Plan: ${record.planName}", style = MaterialTheme.typography.bodySmall)
+                                    Text("Expires: ${sdf.format(Date(record.expiresAtMillis))}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text("HW ID: ${record.deviceHardwareId.take(16)}...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==========================================
         // MONTHLY & YEARLY SUBSCRIPTION PLANS
         // ==========================================
         Text(
@@ -298,6 +494,8 @@ fun SaaSAdminScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            val deviceId = ParkSathiNetworkClient.getDeviceId(context)
+
             // Monthly Plan
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -319,13 +517,34 @@ fun SaaSAdminScreen(
 
                     Button(
                         onClick = {
+                            val msg = "Hi, I want to purchase a Monthly Pro Subscription (NPR 1,500) for my POS Device HW ID: $deviceId"
+                            val url = "https://api.whatsapp.com/send?phone=9779800000000&text=" + Uri.encode(msg)
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://prajnaworld.com"))
+                                context.startActivity(webIntent)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Buy via WhatsApp", fontSize = 11.sp, color = Color.White)
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    OutlinedButton(
+                        onClick = {
                             selectedPlanForQrPayment = SubscriptionPlan.MONTHLY
                             selectedGatewayForQrPayment = PaymentGateway.FONEPAY
                         },
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Renew Monthly", fontSize = 12.sp)
+                        Text("Pay Fonepay QR", fontSize = 11.sp)
                     }
                 }
             }
@@ -343,7 +562,7 @@ fun SaaSAdminScreen(
                     }
                     Text("YEARLY ENTERPRISE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     Text("NPR 15,000", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("/ year (2 Mins Free)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    Text("/ year (2 Months Free)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("• 365-Day POS Access", style = MaterialTheme.typography.bodySmall)
@@ -354,14 +573,34 @@ fun SaaSAdminScreen(
 
                     Button(
                         onClick = {
-                            selectedPlanForQrPayment = SubscriptionPlan.YEARLY
-                            selectedGatewayForQrPayment = PaymentGateway.FONEPAY
+                            val msg = "Hi, I want to purchase a Yearly Enterprise Subscription (NPR 15,000) for my POS Device HW ID: $deviceId"
+                            val url = "https://api.whatsapp.com/send?phone=9779800000000&text=" + Uri.encode(msg)
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://prajnaworld.com"))
+                                context.startActivity(webIntent)
+                            }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Renew Yearly", fontSize = 12.sp)
+                        Text("Buy via WhatsApp", fontSize = 11.sp, color = Color.White)
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            selectedPlanForQrPayment = SubscriptionPlan.YEARLY
+                            selectedGatewayForQrPayment = PaymentGateway.FONEPAY
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Pay Fonepay QR", fontSize = 11.sp)
                     }
                 }
             }
