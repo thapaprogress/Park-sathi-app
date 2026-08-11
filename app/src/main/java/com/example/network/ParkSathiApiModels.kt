@@ -6,22 +6,27 @@ import com.squareup.moshi.JsonClass
 // 1. License Verification & Heartbeat
 @JsonClass(generateAdapter = true)
 data class VerifyLicenseRequest(
-    @Json(name = "serialKey") val serialKey: String,
-    @Json(name = "licenseKey") val licenseKey: String = serialKey,
-    @Json(name = "deviceId") val deviceId: String,
-    @Json(name = "deviceModel") val deviceModel: String,
-    @Json(name = "appVersion") val appVersion: String,
-    @Json(name = "merchantId") val merchantId: String
+    @Json(name = "license_key") val licenseKey: String,
+    @Json(name = "serialKey") val serialKey: String = licenseKey,
+    @Json(name = "device_id") val deviceId: String,
+    @Json(name = "app_version") val appVersion: String = "v3.2.1-IRD",
+    @Json(name = "client_timestamp_ms") val clientTimestampMs: Long = System.currentTimeMillis(),
+    @Json(name = "days_offline") val daysOffline: Int = 0,
+    @Json(name = "deviceModel") val deviceModel: String = "SUNMI V2/V3 POS",
+    @Json(name = "merchantId") val merchantId: String = "PRAJNA-WORLD-01"
 )
 
 @JsonClass(generateAdapter = true)
 data class VerifyLicenseResponse(
-    @Json(name = "valid") val valid: Boolean,
-    @Json(name = "status") val status: String, // e.g. "ACTIVE", "EXPIRED"
+    @Json(name = "status") val status: String, // ACTIVE | EXPIRED_OR_INVALID | DEVICE_MISMATCH | CLOCK_ROLLBACK_DETECTED | REAUTH_REQUIRED
+    @Json(name = "valid") val valid: Boolean = false,
+    @Json(name = "device_id_locked") val deviceIdLocked: String? = null,
+    @Json(name = "expires_at") val expiresAt: String? = null,
+    @Json(name = "max_offline_grace_days") val maxOfflineGraceDays: Int? = 7,
+    @Json(name = "api_base_url") val apiBaseUrl: String? = null,
     @Json(name = "merchantName") val merchantName: String? = "Park Sathi Merchant",
     @Json(name = "plan") val plan: String? = "MONTHLY_PRO",
     @Json(name = "allowedGates") val allowedGates: Int? = 5,
-    @Json(name = "expiresAt") val expiresAt: String? = null,
     @Json(name = "supportPhone") val supportPhone: String? = "+977-9765985999",
     @Json(name = "supportAddress") val supportAddress: String? = "Samakhushi Chowk, Kathmandu",
     @Json(name = "supportWebsite") val supportWebsite: String? = "Prajnaworld.com",

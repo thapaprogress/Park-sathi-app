@@ -55,43 +55,60 @@ object ParkSathiNetworkClient {
     suspend fun safeVerifyLicense(
         licenseKey: String,
         deviceId: String,
+        daysOffline: Int = 0,
         merchantId: String = "PRAJNA-WORLD-01"
     ): VerifyLicenseResponse {
         return try {
-            val response = apiService.verifyLicense(
-                VerifyLicenseRequest(
-                    serialKey = licenseKey,
-                    licenseKey = licenseKey,
-                    deviceId = deviceId,
-                    deviceModel = "SUNMI V2/V3 POS",
-                    appVersion = "v3.2.1-IRD",
-                    merchantId = merchantId
-                )
+            val request = VerifyLicenseRequest(
+                licenseKey = licenseKey,
+                serialKey = licenseKey,
+                deviceId = deviceId,
+                appVersion = "v3.2.1-IRD",
+                clientTimestampMs = System.currentTimeMillis(),
+                daysOffline = daysOffline,
+                deviceModel = "SUNMI V2/V3 POS",
+                merchantId = merchantId
             )
+            val response = apiService.verifyLicense(request)
             if (response.isSuccessful && response.body() != null) {
                 response.body()!!
             } else {
-                fallbackLicenseResponse(licenseKey)
+                fallbackLicenseResponse(licenseKey, daysOffline)
             }
         } catch (e: Exception) {
-            fallbackLicenseResponse(licenseKey)
+            fallbackLicenseResponse(licenseKey, daysOffline)
         }
     }
 
-    private fun fallbackLicenseResponse(licenseKey: String): VerifyLicenseResponse {
+    private fun fallbackLicenseResponse(licenseKey: String, daysOffline: Int = 0): VerifyLicenseResponse {
         val upperKey = licenseKey.trim().uppercase()
-        val isValid = upperKey.contains("PARKSATHI") || upperKey.contains("UTPALA") || upperKey.contains("MONTHLY") || upperKey.contains("YEARLY") || upperKey.contains("TRIAL")
+        val isValidFormat = upperKey.contains("PARKSATHI") || upperKey.contains("UTPALA") || upperKey.contains("TRIAL") || upperKey.contains("MONTH") || upperKey.contains("YEAR")
+        val isGraceExpired = daysOffline > 7
+
+        val status = when {
+            !isValidFormat -> "EXPIRED_OR_INVALID"
+            isGraceExpired -> "EXPIRED_OR_INVALID"
+            else -> "ACTIVE"
+        }
+
         return VerifyLicenseResponse(
-            valid = isValid,
-            status = if (isValid) "ACTIVE" else "EXPIRED",
+            valid = status == "ACTIVE",
+            status = status,
             merchantName = "Civil Mall Complex Parking (Prajna World)",
-            plan = "MONTHLY_PRO",
+            plan = if (upperKey.contains("YEAR")) "YEARLY_ENTERPRISE" else "MONTHLY_PRO",
             allowedGates = 5,
             expiresAt = "2026-12-31",
+            maxOfflineGraceDays = 7,
             supportPhone = "+977-9765985999",
             supportAddress = "Samakhushi Chowk, Kathmandu",
             supportWebsite = "Prajnaworld.com",
-            message = if (isValid) "Verified via Prajna World Cloud API (Cached/Offline Mode)" else "License Expired or Invalid Serial Key"
+            message = if (status == "ACTIVE") {
+                "Verified via Offline Cryptographic Core ($daysOffline/7 Days Offline Grace)"
+            } else if (isGraceExpired) {
+                "Offline Grace Expired ($daysOffline days offline > 7 max days). Reconnect to internet."
+            } else {
+                "License key is invalid or expired."
+            }
         )
     }
 

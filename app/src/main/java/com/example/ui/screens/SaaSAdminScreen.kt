@@ -180,10 +180,36 @@ fun SaaSAdminScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Offline Operation Grace:",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    Text(
+                        text = if (subInfo.isGraceExpired) {
+                            "⛔ GRACE EXPIRED (${subInfo.daysOffline}d offline)"
+                        } else {
+                            "🟢 ACTIVE (${subInfo.graceDaysRemaining}/${subInfo.maxOfflineGraceDays} Days Left)"
+                        },
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (subInfo.isGraceExpired) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                    )
+                }
+
                 if (subInfo.isExpired) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "⚠️ Ticket issuing is locked! Please activate a Monthly or Yearly license below.",
+                        text = if (subInfo.isGraceExpired) {
+                            "⚠️ Offline Grace Expired (${subInfo.daysOffline} days without server check). Connect to Wi-Fi/4G to re-verify license."
+                        } else {
+                            "⚠️ Ticket issuing is locked! Please activate a Monthly or Yearly license below."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         fontWeight = FontWeight.Bold

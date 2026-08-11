@@ -29,7 +29,12 @@ data class SubscriptionInfo(
     val isExpired: Boolean,
     val daysRemaining: Int,
     val maxGatesAllowed: Int = 10,
-    val merchantName: String = "Park Sathi Merchant"
+    val merchantName: String = "Park Sathi Merchant",
+    val isGraceExpired: Boolean = false,
+    val daysOffline: Int = 0,
+    val maxOfflineGraceDays: Int = 7,
+    val graceDaysRemaining: Int = 7,
+    val deviceIdLocked: String? = null
 )
 
 class SaaSSubscriptionManager(private val context: Context) {
@@ -42,22 +47,13 @@ class SaaSSubscriptionManager(private val context: Context) {
         const val KEY_ACTIVATED_AT = "saas_activated_at"
         const val KEY_EXPIRES_AT = "saas_expires_at"
         const val KEY_MERCHANT_NAME = "saas_merchant_name"
-
-        // Demo valid license keys for testing
-        val DEMO_KEYS = mapOf(
-            "PARKSATHI-TRIAL-14D" to SubscriptionPlan.TRIAL,
-            "PARKSATHI-MONTHLY-2026" to SubscriptionPlan.MONTHLY,
-            "PARKSATHI-YEARLY-2026" to SubscriptionPlan.YEARLY,
-            "UTPALA-TRIAL-14D" to SubscriptionPlan.TRIAL,
-            "UTPALA-MONTHLY-2026" to SubscriptionPlan.MONTHLY,
-            "UTPALA-YEARLY-2026" to SubscriptionPlan.YEARLY,
-            "NEPAL-POS-PRO-30" to SubscriptionPlan.MONTHLY,
-            "NEPAL-POS-ENT-365" to SubscriptionPlan.YEARLY
-        )
+        const val KEY_LAST_ONLINE_VERIFIED_AT = "saas_last_online_verified_at"
+        const val KEY_DEVICE_ID_LOCKED = "saas_device_id_locked"
+        const val KEY_MAX_OFFLINE_GRACE_DAYS = "saas_max_offline_grace_days"
     }
 
     init {
-        // Initialize default trial if never activated before
+        // Initialize default 14-day free trial on first install
         if (!prefs.contains(KEY_PLAN_NAME)) {
             val now = System.currentTimeMillis()
             val trialDays = 14
@@ -68,6 +64,8 @@ class SaaSSubscriptionManager(private val context: Context) {
                 .putString(KEY_LICENSE_KEY, "PARKSATHI-TRIAL-14D")
                 .putLong(KEY_ACTIVATED_AT, now)
                 .putLong(KEY_EXPIRES_AT, expiry)
+                .putLong(KEY_LAST_ONLINE_VERIFIED_AT, now)
+                .putInt(KEY_MAX_OFFLINE_GRACE_DAYS, 7)
                 .apply()
 
             recordActivationInRoom("PARKSATHI-TRIAL-14D", SubscriptionPlan.TRIAL, now, expiry)
@@ -80,10 +78,20 @@ class SaaSSubscriptionManager(private val context: Context) {
         val activatedAt = prefs.getLong(KEY_ACTIVATED_AT, System.currentTimeMillis())
         val expiresAt = prefs.getLong(KEY_EXPIRES_AT, System.currentTimeMillis() + (14 * 24 * 60 * 60 * 1000L))
         val merchantName = prefs.getString(KEY_MERCHANT_NAME, "Civil Mall Complex Parking") ?: "Civil Mall Complex Parking"
+        val lastVerifiedAt = prefs.getLong(KEY_LAST_ONLINE_VERIFIED_AT, activatedAt)
+        val maxGraceDays = prefs.getInt(KEY_MAX_OFFLINE_GRACE_DAYS, 7)
+        val lockedDevice = prefs.getString(KEY_DEVICE_ID_LOCKED, null)
 
         val now = System.currentTimeMillis()
-        val isExpired = now > expiresAt
-        
+        val isExpiredByTime = now > expiresAt
+
+        val diffOfflineMillis = if (now >= lastVerifiedAt) now - lastVerifiedAt else 0L
+        val daysOffline = (diffOfflineMillis / (1000 * 60 * 60 * 24)).toInt()
+        val isGraceExpired = daysOffline > maxGraceDays
+        val graceDaysRemaining = if (maxGraceDays >= daysOffline) maxGraceDays - daysOffline else 0
+
+        val isExpired = isExpiredByTime || isGraceExpired
+
         val storedPlan = try {
             SubscriptionPlan.valueOf(planName)
         } catch (e: Exception) {
@@ -107,7 +115,12 @@ class SaaSSubscriptionManager(private val context: Context) {
             isExpired = isExpired,
             daysRemaining = daysRemaining,
             maxGatesAllowed = if (effectivePlan == SubscriptionPlan.YEARLY) 25 else 5,
-            merchantName = merchantName
+            merchantName = merchantName,
+            isGraceExpired = isGraceExpired,
+            daysOffline = daysOffline,
+            maxOfflineGraceDays = maxGraceDays,
+            graceDaysRemaining = graceDaysRemaining,
+            deviceIdLocked = lockedDevice
         )
     }
 
@@ -115,22 +128,57 @@ class SaaSSubscriptionManager(private val context: Context) {
         val trimmedKey = inputKey.trim().uppercase(Locale.US)
         val deviceId = ParkSathiNetworkClient.getDeviceId(context)
 
+        val info = getSubscriptionInfo()
+
         val apiResponse = ParkSathiNetworkClient.safeVerifyLicense(
             licenseKey = trimmedKey,
-            deviceId = deviceId
+            deviceId = deviceId,
+            daysOffline = info.daysOffline
         )
 
-        if (apiResponse.valid && apiResponse.status == "ACTIVE") {
-            val matchedPlan = DEMO_KEYS[trimmedKey] ?: when {
-                trimmedKey.contains("YEAR") || trimmedKey.contains("ENT") -> SubscriptionPlan.YEARLY
-                else -> SubscriptionPlan.MONTHLY
+        val now = System.currentTimeMillis()
+
+        return when (apiResponse.status) {
+            "ACTIVE" -> {
+                prefs.edit()
+                    .putLong(KEY_LAST_ONLINE_VERIFIED_AT, now)
+                    .putInt(KEY_MAX_OFFLINE_GRACE_DAYS, apiResponse.maxOfflineGraceDays ?: 7)
+                    .apply()
+                if (apiResponse.merchantName != null) {
+                    prefs.edit().putString(KEY_MERCHANT_NAME, apiResponse.merchantName).apply()
+                }
+                if (apiResponse.deviceIdLocked != null) {
+                    prefs.edit().putString(KEY_DEVICE_ID_LOCKED, apiResponse.deviceIdLocked).apply()
+                }
+
+                val plan = when {
+                    trimmedKey.contains("YEAR") || trimmedKey.contains("ENT") || apiResponse.plan?.contains("YEAR") == true -> SubscriptionPlan.YEARLY
+                    trimmedKey.contains("TRIAL") -> SubscriptionPlan.TRIAL
+                    else -> SubscriptionPlan.MONTHLY
+                }
+
+                applySubscriptionPlan(plan, trimmedKey)
             }
-            if (apiResponse.merchantName != null) {
-                prefs.edit().putString(KEY_MERCHANT_NAME, apiResponse.merchantName).apply()
+            "DEVICE_MISMATCH" -> {
+                Pair(false, "⛔ License Key is locked to another device (${apiResponse.deviceIdLocked ?: "Registered Device"}). Single-device license policy.")
             }
-            return applySubscriptionPlan(matchedPlan, trimmedKey)
-        } else {
-            return Pair(false, apiResponse.message ?: "License verification failed or license is expired.")
+            "CLOCK_ROLLBACK_DETECTED" -> {
+                Pair(false, "⏰ System clock rollback detected! Please update device date and time settings.")
+            }
+            "REAUTH_REQUIRED" -> {
+                Pair(false, "🔑 Re-authentication required by SaaS Admin. Please enter key again.")
+            }
+            "EXPIRED_OR_INVALID", "EXPIRED" -> {
+                Pair(false, apiResponse.message ?: "License key is expired or invalid.")
+            }
+            else -> {
+                if (apiResponse.valid) {
+                    prefs.edit().putLong(KEY_LAST_ONLINE_VERIFIED_AT, now).apply()
+                    applySubscriptionPlan(SubscriptionPlan.MONTHLY, trimmedKey)
+                } else {
+                    Pair(false, apiResponse.message ?: "License verification failed.")
+                }
+            }
         }
     }
 
@@ -139,10 +187,18 @@ class SaaSSubscriptionManager(private val context: Context) {
         val deviceId = ParkSathiNetworkClient.getDeviceId(context)
         val response = ParkSathiNetworkClient.safeVerifyLicense(
             licenseKey = info.licenseKey,
-            deviceId = deviceId
+            deviceId = deviceId,
+            daysOffline = info.daysOffline
         )
-        if (response.valid && response.status == "ACTIVE" && response.merchantName != null) {
-            prefs.edit().putString(KEY_MERCHANT_NAME, response.merchantName).apply()
+        if (response.valid && response.status == "ACTIVE") {
+            val now = System.currentTimeMillis()
+            prefs.edit()
+                .putLong(KEY_LAST_ONLINE_VERIFIED_AT, now)
+                .putInt(KEY_MAX_OFFLINE_GRACE_DAYS, response.maxOfflineGraceDays ?: 7)
+                .apply()
+            if (response.merchantName != null) {
+                prefs.edit().putString(KEY_MERCHANT_NAME, response.merchantName).apply()
+            }
         }
         return response
     }
@@ -150,14 +206,10 @@ class SaaSSubscriptionManager(private val context: Context) {
     fun activateLicenseKey(inputKey: String): Pair<Boolean, String> {
         val trimmedKey = inputKey.trim().uppercase(Locale.US)
         
-        // 1. Check mapped demo keys
-        val matchedPlan = DEMO_KEYS[trimmedKey]
-        if (matchedPlan != null) {
-            return applySubscriptionPlan(matchedPlan, trimmedKey)
-        }
-
-        // 2. Custom Key Pattern Validation e.g., PARKSATHI-M30-XXXX or UTPALA-M30-XXXX
         return when {
+            trimmedKey == "PARKSATHI-TRIAL-14D" || trimmedKey == "UTPALA-TRIAL-14D" -> {
+                applySubscriptionPlan(SubscriptionPlan.TRIAL, trimmedKey)
+            }
             trimmedKey.startsWith("PARKSATHI-M") || trimmedKey.startsWith("UTPALA-M") || trimmedKey.contains("MONTH") -> {
                 applySubscriptionPlan(SubscriptionPlan.MONTHLY, trimmedKey)
             }
@@ -168,7 +220,7 @@ class SaaSSubscriptionManager(private val context: Context) {
                 applySubscriptionPlan(SubscriptionPlan.MONTHLY, trimmedKey)
             }
             else -> {
-                Pair(false, "Invalid License Key format. Try PARKSATHI-MONTHLY-2026 or PARKSATHI-YEARLY-2026")
+                Pair(false, "Invalid License Key format. Request a valid key via WhatsApp or Website.")
             }
         }
     }
