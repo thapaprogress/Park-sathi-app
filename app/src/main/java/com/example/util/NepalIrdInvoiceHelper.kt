@@ -9,7 +9,7 @@ object NepalIrdInvoiceHelper {
 
     // Default IRD PAN & Operator details for Nepal market
     const val DEFAULT_PAN_NUMBER = "609874123"
-    const val DEFAULT_COMPANY_NAME = "Utpala Parking Services Pvt. Ltd."
+    const val DEFAULT_COMPANY_NAME = "Parksathi Services Pvt. Ltd."
     const val DEFAULT_OPERATOR_ADDRESS = "Bouddha, Kathmandu, Nepal"
 
     fun generateIrdInvoiceNumber(ticketId: String, checkOutTimeMillis: Long): String {

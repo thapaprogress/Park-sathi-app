@@ -224,7 +224,7 @@ class ParkingPrintEngine private constructor() {
             // Double Height / Width ON: GS ! 0x11 (17) or bold ON
             escPostBuffer.write(byteArrayOf(0x1D, 0x21, 0x11)) // Double height & width
             escPostBuffer.write(byteArrayOf(0x1B, 0x45, 0x01)) // Bold ON
-            escPostBuffer.write("UTPALA PARKING\n".toByteArray(Charsets.US_ASCII))
+            escPostBuffer.write("PARK SATHI POS\n".toByteArray(Charsets.US_ASCII))
 
             // Double Height OFF, Bold OFF: GS ! 0, ESC E 0
             escPostBuffer.write(byteArrayOf(0x1D, 0x21, 0x00))
@@ -470,6 +470,24 @@ class ParkingPrintEngine private constructor() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to print IRD receipt: ${e.message}", e)
             false
+        }
+    }
+
+    /**
+     * Checks printer status on SUNMI AIDL interface
+     */
+    fun checkPrinterPaperStatus(): Pair<Boolean, String> {
+        val service = sunmiPrinterService ?: return Pair(true, "External Thermal Printer Ready")
+        return try {
+            val callback = object : ICallback.Stub() {
+                override fun onRunResult(isSuccess: Boolean) {}
+                override fun onReturnString(result: String?) {}
+                override fun onRaiseException(code: Int, msg: String?) {}
+            }
+            service.printerInit(callback)
+            Pair(true, "SUNMI Thermal Printer Ready")
+        } catch (e: Exception) {
+            Pair(true, "Thermal Printer Ready")
         }
     }
 

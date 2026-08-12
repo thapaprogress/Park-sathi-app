@@ -28,6 +28,8 @@ fun UtpalaParkingApp(viewModel: ParkingViewModel) {
     val isSyncing by viewModel.syncEngine.isSyncing.collectAsState()
     val statusMessage by viewModel.printStatusMessage.collectAsState()
 
+    val isHighContrastOutdoor by viewModel.isHighContrastOutdoor.collectAsState()
+
     // Show Android Toasts when print/checkout operations take place
     LaunchedEffect(statusMessage) {
         statusMessage?.let {
@@ -36,54 +38,66 @@ fun UtpalaParkingApp(viewModel: ParkingViewModel) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.LocalShipping,
-                                contentDescription = "Logo",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+    com.example.ui.theme.MyApplicationTheme(
+        isHighContrastOutdoor = isHighContrastOutdoor
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalShipping,
+                                    contentDescription = "Logo",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "PARK SATHI POS",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                                )
+                            }
                             Text(
-                                text = "PARK SATHI POS",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                                text = if (isNepali) "पार्क साथी साास (SaaS Nepal System)" else "Nepal SaaS POS & Fiscal System",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text(
-                            text = if (isNepali) "पार्क साथी साास (SaaS Nepal System)" else "Nepal SaaS POS & Fiscal System",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    actions = {
+                        // High Contrast Outdoor Toggle
+                        IconButton(onClick = { viewModel.toggleHighContrastOutdoor(!isHighContrastOutdoor) }) {
+                            Icon(
+                                imageVector = if (isHighContrastOutdoor) Icons.Default.WbSunny else Icons.Default.LightMode,
+                                contentDescription = "Outdoor Mode",
+                                tint = if (isHighContrastOutdoor) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        // SaaS Cloud Sync Header Badge
+                        CloudSyncHeaderBadge(
+                            unsyncedCount = unsyncedCount,
+                            isSyncing = isSyncing,
+                            onSyncClick = { viewModel.triggerCloudSync() }
                         )
-                    }
-                },
-                actions = {
-                    // SaaS Cloud Sync Header Badge
-                    CloudSyncHeaderBadge(
-                        unsyncedCount = unsyncedCount,
-                        isSyncing = isSyncing,
-                        onSyncClick = { viewModel.triggerCloudSync() }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Language Switcher Toggle Header
+                        LanguageToggleHeader(
+                            isNepali = isNepali,
+                            onLanguageToggle = { viewModel.setLanguageNepali(it) }
+                        )
+
+                        Spacer(modifier = Modifier.width(4.dp))
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Language Switcher Toggle Header
-                    LanguageToggleHeader(
-                        isNepali = isNepali,
-                        onLanguageToggle = { viewModel.setLanguageNepali(it) }
-                    )
-
-                    Spacer(modifier = Modifier.width(6.dp))
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
-        },
+            },
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface
@@ -149,3 +163,7 @@ fun UtpalaParkingApp(viewModel: ParkingViewModel) {
         }
     }
 }
+}
+
+
+

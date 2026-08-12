@@ -236,14 +236,14 @@ fun CheckoutScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Utpala Cafe Seal Switch
+                    // Staff Seal Switch (100% Waived Pass)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = if (isNepali) "उत्पला क्याफे सिल (नि:शुल्क निस्कने Pass)" else "Utpala Cafe Seal (100% Waived Pass)",
+                            text = if (isNepali) "स्टाफ सिल (नि:शुल्क निस्कने Pass)" else "Staff Seal (100% Waived Pass)",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium
                         )

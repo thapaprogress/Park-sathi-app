@@ -37,6 +37,17 @@ fun EntryScreen(
     val statusMessage by viewModel.printStatusMessage.collectAsState()
     val freeMinutes by viewModel.freeMinutes.collectAsState()
     val subInfo by viewModel.subscriptionInfoFlow.collectAsState()
+    val showLivePreview by viewModel.showLivePreview.collectAsState()
+    val showPreviewModal by viewModel.showPreviewModal.collectAsState()
+    val qrPrefix by viewModel.qrCodePrefix.collectAsState()
+    val printFooterText by viewModel.printFooterText.collectAsState()
+    val attendantId by viewModel.attendantId.collectAsState()
+
+    val currentRate = when (selectedType) {
+        VehicleType.BIKE -> bikeRate
+        VehicleType.CAR -> carRate
+        VehicleType.TRUCK -> truckRate
+    }
 
     Column(
         modifier = modifier
@@ -335,59 +346,252 @@ fun EntryScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Nepal License Plate Quick Shortcuts
-        Text(
-            text = if (isNepali) "द्रुत नम्बर सिफारिस:" else "Quick License Plate Helpers:",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(6.dp))
+        // Nepal License Plate Quick Numpad & Helpers
+        var showSpeedNumpad by remember { mutableStateOf(true) }
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (isNepali) "सवारी नम्बर द्रुत प्याड (Speed Numpad):" else "Nepal License Plate Speed Numpad:",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            TextButton(
+                onClick = { showSpeedNumpad = !showSpeedNumpad },
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                Text(if (showSpeedNumpad) (if (isNepali) "लुकाउनुहोस्" else "Hide Numpad") else (if (isNepali) "देखाउनुहोस्" else "Show Numpad"), fontSize = 12.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Prefix chips row
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            val prefixes = listOf("BA 2 PA", "BAGMATI", "PRO-3", "LU 1 PA")
-            prefixes.forEach { prefix ->
-                AssistChip(
+            val quickPrefixes = listOf("BA", "BAGMATI", "PRO 01", "PA", "CHA", "LU", "KO")
+            quickPrefixes.forEach { pref ->
+                FilterChip(
+                    selected = vehicleNumber.startsWith(pref),
                     onClick = {
-                        val randomDigits = (1000..9999).random()
-                        viewModel.updateVehicleNumber("$prefix $randomDigits")
+                        if (!vehicleNumber.contains(pref)) {
+                            viewModel.updateVehicleNumber("$pref $vehicleNumber".trim())
+                        }
                     },
-                    label = { Text(prefix, fontSize = 12.sp) },
-                    shape = RoundedCornerShape(10.dp)
+                    label = { Text(pref, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    shape = RoundedCornerShape(8.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        if (showSpeedNumpad) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    val numpadRows = listOf(
+                        listOf("1", "2", "3", "BA"),
+                        listOf("4", "5", "6", "PA"),
+                        listOf("7", "8", "9", "CHA"),
+                        listOf("CLEAR", "0", "SPACE", "DEL")
+                    )
 
-        // Issue Ticket Action Button
-        Button(
-            onClick = { viewModel.issueTicket() },
-            enabled = vehicleNumber.length >= 3 && !isPrinting && !subInfo.isExpired,
+                    numpadRows.forEach { row ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                        ) {
+                            row.forEach { btnKey ->
+                                Surface(
+                                    onClick = {
+                                        when (btnKey) {
+                                            "CLEAR" -> viewModel.updateVehicleNumber("")
+                                            "DEL" -> if (vehicleNumber.isNotEmpty()) viewModel.updateVehicleNumber(vehicleNumber.dropLast(1))
+                                            "SPACE" -> viewModel.updateVehicleNumber("$vehicleNumber ")
+                                            else -> viewModel.updateVehicleNumber("$vehicleNumber$btnKey")
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = when (btnKey) {
+                                        "CLEAR" -> MaterialTheme.colorScheme.errorContainer
+                                        "DEL" -> MaterialTheme.colorScheme.secondaryContainer
+                                        "BA", "PA", "CHA" -> MaterialTheme.colorScheme.primaryContainer
+                                        else -> MaterialTheme.colorScheme.surface
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = btnKey,
+                                            style = MaterialTheme.typography.labelLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            ),
+                                            color = when (btnKey) {
+                                                "CLEAR" -> MaterialTheme.colorScheme.onErrorContainer
+                                                "DEL" -> MaterialTheme.colorScheme.onSecondaryContainer
+                                                "BA", "PA", "CHA" -> MaterialTheme.colorScheme.onPrimaryContainer
+                                                else -> MaterialTheme.colorScheme.onSurface
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Live Ticket Preview Card & Toggle Header
+        Card(
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            if (isPrinting) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(if (isNepali) "प्रिन्ट हुँदैछ..." else "Printing POS Receipt...")
-            } else {
-                Icon(Icons.Default.Print, contentDescription = null)
-                Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = if (isNepali) "थर्मल रसीद लाइभ देखाइ (Live Thermal Preview)" else "Live Thermal Receipt Preview",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    Switch(
+                        checked = showLivePreview,
+                        onCheckedChange = { viewModel.toggleLivePreview(it) },
+                        thumbContent = {
+                            Icon(
+                                imageVector = if (showLivePreview) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    )
+                }
+
+                if (showLivePreview) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        com.example.ui.components.ThermalTicketPreviewCard(
+                            vehicleNumber = vehicleNumber,
+                            vehicleType = selectedType,
+                            hourlyRate = currentRate,
+                            attendantId = attendantId,
+                            gateId = "GATE-01",
+                            companyName = subInfo.merchantName,
+                            companyPan = NepalIrdInvoiceHelper.DEFAULT_PAN_NUMBER,
+                            footerText = printFooterText,
+                            qrPrefix = qrPrefix,
+                            isNepali = isNepali,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Action Row: Preview Modal Button & Direct Issue Print Button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedButton(
+                onClick = { viewModel.openPreviewModal() },
+                enabled = vehicleNumber.length >= 3 && !isPrinting && !subInfo.isExpired,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp)
+            ) {
+                Icon(Icons.Default.RemoveRedEye, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (isNepali) "प्रवेश पास प्रिन्ट गर्नुहोस्" else "PRINT ENTRY TICKET",
-                    fontSize = 16.sp,
+                    text = if (isNepali) "पूर्वावलोकन" else "PREVIEW TICKET",
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            Button(
+                onClick = { viewModel.issueTicket() },
+                enabled = vehicleNumber.length >= 3 && !isPrinting && !subInfo.isExpired,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .weight(1.3f)
+                    .height(56.dp)
+            ) {
+                if (isPrinting) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (isNepali) "प्रिन्ट हुँदैछ..." else "Printing...")
+                } else {
+                    Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isNepali) "प्रिन्ट गर्नुहोस्" else "PRINT TICKET",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Preview & Confirm Modal Dialog
+        if (showPreviewModal) {
+            com.example.ui.components.TicketPreviewModalDialog(
+                vehicleNumber = vehicleNumber,
+                vehicleType = selectedType,
+                hourlyRate = currentRate,
+                attendantId = attendantId,
+                gateId = "GATE-01",
+                companyName = subInfo.merchantName,
+                companyPan = NepalIrdInvoiceHelper.DEFAULT_PAN_NUMBER,
+                footerText = printFooterText,
+                qrPrefix = qrPrefix,
+                isNepali = isNepali,
+                isPrinting = isPrinting,
+                onConfirmPrint = { viewModel.issueTicket() },
+                onDismiss = { viewModel.closePreviewModal() }
+            )
         }
     }
 }
